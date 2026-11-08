@@ -7,6 +7,7 @@
 #include "Net/HLServerClockComponent.h"
 #include "Replay/HLReplayComponent.h"
 #include "Measure/HLPeekComponent.h"
+#include "Measure/HLHitregBenchComponent.h"
 #include "Weapons/HLWeaponComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "Engine/LocalPlayer.h"
@@ -29,6 +30,7 @@ AHLPlayerController::AHLPlayerController()
 	Clock = CreateDefaultSubobject<UHLServerClockComponent>(TEXT("Clock"));
 	Replay = CreateDefaultSubobject<UHLReplayComponent>(TEXT("Replay"));
 	Peek = CreateDefaultSubobject<UHLPeekComponent>(TEXT("Peek"));
+	HitregBench = CreateDefaultSubobject<UHLHitregBenchComponent>(TEXT("HitregBench"));
 }
 
 const FHLInputActions& AHLPlayerController::GetActions()
@@ -316,6 +318,14 @@ void AHLPlayerController::HLPeekSweep(int32 TrialsPerConfig, int32 Full)
 	if (Peek)
 	{
 		Peek->Server_StartSweep(TrialsPerConfig, Full != 0);
+	}
+}
+
+void AHLPlayerController::HLHitregBench(int32 ShotsPerConfig)
+{
+	if (HitregBench)
+	{
+		HitregBench->Start(ShotsPerConfig);
 	}
 }
 

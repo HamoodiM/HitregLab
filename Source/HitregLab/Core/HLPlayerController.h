@@ -57,6 +57,9 @@ public:
 	UPROPERTY(VisibleAnywhere, Category = "Lab")
 	TObjectPtr<class UHLPeekComponent> Peek;
 
+	UPROPERTY(VisibleAnywhere, Category = "Lab")
+	TObjectPtr<class UHLHitregBenchComponent> HitregBench;
+
 	/** Degrees per mouse count. */
 	UPROPERTY(EditAnywhere, Category = "Lab")
 	float MouseSensitivity = 0.07f;
@@ -82,6 +85,8 @@ public:
 	UFUNCTION(Exec) void HLAddBot(const FString& Mode);
 	UFUNCTION(Exec) void HLSens(float DegPerCount);
 	UFUNCTION(Exec) void HLPlayReplay(const FString& File);
+	/** Lag compensation benchmark: perfect aim at the drawn target, hit rate per RTT with compensation on/off. */
+	UFUNCTION(Exec) void HLHitregBench(int32 ShotsPerConfig = 40);
 	/** Peeker's-advantage sweep (needs 2 connected players). Full=1 runs the whole RTT x tick grid. */
 	UFUNCTION(Exec) void HLPeekSweep(int32 TrialsPerConfig = 10, int32 Full = 1);
 	UFUNCTION(Exec) void HLSaveReplay();
