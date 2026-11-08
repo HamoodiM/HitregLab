@@ -1,0 +1,14 @@
+Binaries/
+Intermediate/
+Saved/
+DerivedDataCache/
+Build/
+.vs/
+.idea/
+*.sln
+*.slnx
+*.suo
+*.VC.db
+*.VC.opendb
+.mcp.json
+CLAUDE.md
