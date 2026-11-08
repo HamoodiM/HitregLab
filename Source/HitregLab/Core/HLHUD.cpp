@@ -27,7 +27,7 @@ namespace
 
 float AHLHUD::Scale() const
 {
-	return Canvas ? FMath::Clamp(Canvas->ClipY / 1080.f, 0.6f, 2.f) : 1.f;
+	return Canvas ? FMath::Clamp(Canvas->ClipY / 900.f, 0.9f, 2.f) : 1.f;
 }
 
 void AHLHUD::Text(const FString& S, float X, float Y, const FLinearColor& Color, float InScale, bool bShadow)

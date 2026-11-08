@@ -318,6 +318,8 @@ void UHLWeaponComponent::FireShot(double ShotTime)
 	const UHLWeaponDefinition* Def = GetCurrentWeapon();
 	AHLCharacter* Char = GetCharacter();
 	const bool bAuthority = GetOwnerRole() == ROLE_Authority;
+	// Bots count as "locally controlled" on the server; cosmetics and hit markers are for humans only
+	const bool bLocalHuman = Char->IsLocallyControlled() && Char->IsPlayerControlled();
 
 	// Aim: camera forward, bent by bullet magnetism (gamepad + assist only), then spread
 	const FVector Origin = Char->GetEyeLocation();
@@ -338,7 +340,7 @@ void UHLWeaponComponent::FireShot(double ShotTime)
 		--PredictedAmmo[CurrentIndex];
 	}
 	Spread.OnShot(*Def);
-	if (Char->IsLocallyControlled())
+	if (bLocalHuman)
 	{
 		Char->AddRecoil(Def->RecoilForShot(ConsecutiveShots) * (Char->IsAiming() ? Def->AdsRecoilScale : 1.f));
 		Char->KickViewModel(Def->bProjectile ? 3.f : 1.f);
@@ -372,7 +374,7 @@ void UHLWeaponComponent::FireShot(double ShotTime)
 				Marker.bKill = false;
 			}
 		}
-		if (Char->IsLocallyControlled())
+		if (bLocalHuman)
 		{
 			if (bDrawTraces)
 			{
@@ -385,7 +387,7 @@ void UHLWeaponComponent::FireShot(double ShotTime)
 	if (bAuthority)
 	{
 		const FHLShotResult Result = ServerProcessShot(Req, false);
-		if (Char->IsLocallyControlled())
+		if (bLocalHuman)
 		{
 			ApplyResult(Result);
 		}
@@ -570,7 +572,7 @@ void UHLWeaponComponent::ApplyResult(const FHLShotResult& Result)
 void UHLWeaponComponent::Multicast_ShotFX_Implementation(FVector_NetQuantize Start, FVector_NetQuantize End, bool bHitCharacter)
 {
 	const AHLCharacter* Char = GetCharacter();
-	if (GetNetMode() == NM_DedicatedServer || (Char && Char->IsLocallyControlled()))
+	if (GetNetMode() == NM_DedicatedServer || (Char && Char->IsLocallyControlled() && Char->IsPlayerControlled()))
 	{
 		return; // the shooter already drew its own predicted tracer
 	}

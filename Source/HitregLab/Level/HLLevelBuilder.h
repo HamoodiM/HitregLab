@@ -89,6 +89,9 @@ private:
 	UPROPERTY()
 	TObjectPtr<UStaticMesh> CubeMesh;
 
+	UPROPERTY()
+	TObjectPtr<UMaterialInterface> ColorMaterial;
+
 	UPROPERTY(VisibleAnywhere, Category = "Layout")
 	TArray<FTransform> PlayerSpawns;
 

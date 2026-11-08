@@ -5,6 +5,7 @@
 #include "Core/HLPlayerController.h"
 #include "Net/HLServerClockComponent.h"
 #include "EngineUtils.h"
+#include "HitregLab.h"
 
 UHLPeekComponent::UHLPeekComponent()
 {
@@ -35,6 +36,24 @@ void UHLPeekComponent::Client_BeginTrial_Implementation(int32 TrialId, EHLPeekRo
 
 void UHLPeekComponent::Client_EndTrial_Implementation()
 {
+	if (!bReported && Role != EHLPeekRole::None)
+	{
+		// Diagnostics: what this client was drawing for the other player
+		const APlayerController* PC = Cast<APlayerController>(GetOwner());
+		const UHLServerClockComponent* Clock = PC ? PC->FindComponentByClass<UHLServerClockComponent>() : nullptr;
+		for (TActorIterator<AHLCharacter> It(GetWorld()); It; ++It)
+		{
+			if (*It == (PC ? PC->GetPawn() : nullptr))
+			{
+				continue;
+			}
+			const FHLPoseHistory& Buf = It->GetInterpBuffer();
+			UE_LOG(LogHitreg, Display, TEXT("Peek trial %d: %s never saw %s. now=%.3f synced=%d rtt=%.0f render=%.3f buffer=[%.3f..%.3f] n=%d drawn=%s role=%d"),
+				ActiveTrial, Role == EHLPeekRole::Peeker ? TEXT("peeker") : TEXT("holder"), *It->GetName(), UHLServerClockComponent::ServerNow(this),
+				Clock ? Clock->IsSynced() : -1, Clock ? Clock->GetRttMs() : -1.0, AHLCharacter::GetRemoteRenderTime(this),
+				Buf.OldestTime(), Buf.NewestTime(), Buf.Num(), *It->GetActorLocation().ToCompactString(), int32(It->GetLocalRole()));
+		}
+	}
 	Role = EHLPeekRole::None;
 	ActiveTrial = INDEX_NONE;
 }
@@ -111,6 +130,8 @@ void UHLPeekComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActo
 		if (!GetWorld()->LineTraceTestByChannel(Me->GetEyeLocation(), Head, ECC_Visibility, Params))
 		{
 			bReported = true;
+			UE_LOG(LogHitreg, Display, TEXT("Peek trial %d: %s sees %s at %.3f (me %s, them %s)"), ActiveTrial, Role == EHLPeekRole::Peeker ? TEXT("peeker") : TEXT("holder"),
+				*Other->GetName(), UHLServerClockComponent::ServerNow(this), *Me->GetActorLocation().ToCompactString(), *Other->GetActorLocation().ToCompactString());
 			Server_ReportSight(ActiveTrial, UHLServerClockComponent::ServerNow(this));
 			break;
 		}

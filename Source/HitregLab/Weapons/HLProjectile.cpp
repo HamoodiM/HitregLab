@@ -29,6 +29,11 @@ AHLProjectile::AHLProjectile()
 	{
 		Mesh->SetStaticMesh(SphereMesh.Object);
 	}
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> ColorMat(TEXT("/Game/HitregLab/Materials/M_HLColor.M_HLColor"));
+	if (ColorMat.Succeeded())
+	{
+		Mesh->SetMaterial(0, ColorMat.Object);
+	}
 
 	Movement = CreateDefaultSubobject<UProjectileMovementComponent>(TEXT("Movement"));
 	Movement->InitialSpeed = 4000.f;

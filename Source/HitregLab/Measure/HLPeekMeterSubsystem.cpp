@@ -12,6 +12,7 @@
 #include "Misc/DateTime.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
+#include "Misc/CommandLine.h"
 
 namespace
 {
@@ -259,5 +260,9 @@ void UHLPeekMeterSubsystem::Finish()
 		{
 			Comp->Client_Summary(Summary);
 		}
+	}
+	if (FParse::Param(FCommandLine::Get(), TEXT("QuitAfterSweep")))
+	{
+		FPlatformMisc::RequestExit(false);
 	}
 }

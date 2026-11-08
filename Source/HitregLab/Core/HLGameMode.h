@@ -21,6 +21,7 @@ public:
 	virtual void StartPlay() override;
 	virtual AActor* ChoosePlayerStart_Implementation(AController* Player) override;
 	virtual void RestartPlayer(AController* NewPlayer) override;
+	virtual void PostLogin(APlayerController* NewPlayer) override;
 
 	/** Weapons every character gets (data assets). Falls back to code presets when empty or missing. */
 	UPROPERTY(Config, EditAnywhere, Category = "Lab")
@@ -53,4 +54,5 @@ private:
 
 	int32 NextSpawnIndex = 0;
 	int32 BotCounter = 0;
+	int32 PlayerCounter = 0;
 };

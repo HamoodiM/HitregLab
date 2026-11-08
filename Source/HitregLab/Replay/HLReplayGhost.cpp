@@ -16,6 +16,7 @@ AHLReplayGhost::AHLReplayGhost()
 
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> CubeMesh(TEXT("/Engine/BasicShapes/Cube.Cube"));
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> SphereMesh(TEXT("/Engine/BasicShapes/Sphere.Sphere"));
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> ColorMat(TEXT("/Game/HitregLab/Materials/M_HLColor.M_HLColor"));
 
 	int32 Index = 0;
 	for (const FHLHitbox& Box : AHLCharacter::MakeDefaultHitboxes())
@@ -55,11 +56,22 @@ AHLReplayGhost::AHLReplayGhost()
 	ViewModel = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("ViewModel"));
 	ViewModel->SetupAttachment(Camera);
 	ViewModel->SetStaticMesh(CubeMesh.Object);
-	ViewModel->SetRelativeLocation(FVector(32.f, 14.f, -16.f));
-	ViewModel->SetRelativeScale3D(FVector(0.5f, 0.07f, 0.1f));
 	ViewModel->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	ViewModel->SetCastShadow(false);
 	ViewModel->SetVisibility(false);
+	ViewModel->SetRelativeLocation(FVector(30.f, 11.f, -12.f));
+	ViewModel->SetRelativeScale3D(FVector(0.3f, 0.04f, 0.06f));
+	if (ColorMat.Succeeded())
+	{
+		for (UStaticMeshComponent* C : { Gun.Get(), ViewModel.Get() })
+		{
+			C->SetMaterial(0, ColorMat.Object);
+		}
+		for (UStaticMeshComponent* C : Parts)
+		{
+			C->SetMaterial(0, ColorMat.Object);
+		}
+	}
 }
 
 void AHLReplayGhost::SetColor(const FLinearColor& Color)

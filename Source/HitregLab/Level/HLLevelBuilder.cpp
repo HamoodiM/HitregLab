@@ -10,10 +10,10 @@
 
 namespace
 {
-	const FLinearColor Floor(0.42f, 0.44f, 0.47f);
-	const FLinearColor FloorLine(0.75f, 0.77f, 0.8f);
-	const FLinearColor Wall(0.62f, 0.64f, 0.67f);
-	const FLinearColor Cover(0.33f, 0.36f, 0.42f);
+	const FLinearColor Floor(0.12f, 0.13f, 0.15f);
+	const FLinearColor FloorLine(0.55f, 0.57f, 0.6f);
+	const FLinearColor Wall(0.3f, 0.32f, 0.35f);
+	const FLinearColor Cover(0.16f, 0.22f, 0.32f);
 	const FLinearColor Accent(0.95f, 0.55f, 0.2f);
 	constexpr float SpawnZ = 100.f; // capsule half height + a little
 }
@@ -22,10 +22,13 @@ AHLLevelBuilder::AHLLevelBuilder()
 {
 	PrimaryActorTick.bCanEverTick = false;
 	USceneComponent* Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
+	Root->SetMobility(EComponentMobility::Static);
 	RootComponent = Root;
 
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> Cube(TEXT("/Engine/BasicShapes/Cube.Cube"));
 	CubeMesh = Cube.Object;
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> ColorMat(TEXT("/Game/HitregLab/Materials/M_HLColor.M_HLColor"));
+	ColorMaterial = ColorMat.Object;
 
 	Sun = CreateDefaultSubobject<UDirectionalLightComponent>(TEXT("Sun"));
 	Sun->SetupAttachment(Root);
@@ -67,6 +70,10 @@ UStaticMeshComponent* AHLLevelBuilder::AddBox(const FVector& Center, const FVect
 {
 	UStaticMeshComponent* C = NewObject<UStaticMeshComponent>(this, NAME_None, RF_Transient);
 	C->SetStaticMesh(CubeMesh);
+	if (ColorMaterial)
+	{
+		C->SetMaterial(0, ColorMaterial);
+	}
 	C->SetupAttachment(RootComponent);
 	C->SetRelativeLocation(Center);
 	C->SetRelativeScale3D(Size / 100.f);

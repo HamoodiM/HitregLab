@@ -14,6 +14,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerState.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "Materials/MaterialInterface.h"
 #include "Net/UnrealNetwork.h"
 #include "UObject/ConstructorHelpers.h"
 
@@ -21,8 +22,8 @@ namespace
 {
 	constexpr float CapsuleRadius = 34.f;
 	constexpr float CapsuleHalfHeight = 88.f;
-	const FVector ViewModelHip(32.f, 14.f, -16.f);
-	const FVector ViewModelAds(30.f, 0.f, -9.5f);
+	const FVector ViewModelHip(26.f, 12.f, -13.f);
+	const FVector ViewModelAds(26.f, 0.f, -6.2f);
 }
 
 TArray<FHLHitbox> AHLCharacter::MakeDefaultHitboxes()
@@ -67,8 +68,10 @@ AHLCharacter::AHLCharacter()
 {
 	PrimaryActorTick.bCanEverTick = true;
 	bReplicates = true;
-	// Remote players are driven by our own snapshots + interpolation, not the engine's replicated movement
-	SetReplicateMovement(false);
+	// Movement must stay replicated: the movement component only sends a client's moves to the server when it is.
+	// Simulated proxies ignore the engine's replicated position, though (see OnRep_ReplicatedMovement): they are
+	// drawn from our own timestamped snapshots at a known interpolation delay.
+	SetReplicateMovement(true);
 	SetNetUpdateFrequency(60.f);
 	SetMinNetUpdateFrequency(60.f);
 
@@ -105,12 +108,17 @@ void AHLCharacter::BuildBody()
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> CubeMesh(TEXT("/Engine/BasicShapes/Cube.Cube"));
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> SphereMesh(TEXT("/Engine/BasicShapes/Sphere.Sphere"));
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> CylinderMesh(TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> ColorMat(TEXT("/Game/HitregLab/Materials/M_HLColor.M_HLColor"));
 
 	auto MakePart = [&](const TCHAR* Name, USceneComponent* Parent, UStaticMesh* InMesh, const FVector& Loc, const FVector& Scale, const FRotator& Rot = FRotator::ZeroRotator)
 	{
 		UStaticMeshComponent* Part = CreateDefaultSubobject<UStaticMeshComponent>(Name);
 		Part->SetupAttachment(Parent);
 		Part->SetStaticMesh(InMesh);
+		if (ColorMat.Succeeded())
+		{
+			Part->SetMaterial(0, ColorMat.Object);
+		}
 		Part->SetRelativeLocation(Loc);
 		Part->SetRelativeRotation(Rot);
 		Part->SetRelativeScale3D(Scale);
@@ -145,8 +153,8 @@ void AHLCharacter::BuildBody()
 	ViewModelRoot = CreateDefaultSubobject<USceneComponent>(TEXT("ViewModelRoot"));
 	ViewModelRoot->SetupAttachment(Camera);
 	ViewModelRoot->SetRelativeLocation(ViewModelHip);
-	ViewModelBody = MakePart(TEXT("ViewModelBody"), ViewModelRoot, CubeMesh.Object, FVector(0.f, 0.f, 0.f), FVector(0.5f, 0.07f, 0.1f));
-	ViewModelBarrel = MakePart(TEXT("ViewModelBarrel"), ViewModelRoot, CylinderMesh.Object, FVector(32.f, 0.f, 2.f), FVector(0.035f, 0.035f, 0.2f), FRotator(-90.f, 0.f, 0.f));
+	ViewModelBody = MakePart(TEXT("ViewModelBody"), ViewModelRoot, CubeMesh.Object, FVector(0.f, 0.f, 0.f), FVector(0.22f, 0.035f, 0.05f));
+	ViewModelBarrel = MakePart(TEXT("ViewModelBarrel"), ViewModelRoot, CylinderMesh.Object, FVector(15.f, 0.f, 1.2f), FVector(0.018f, 0.018f, 0.1f), FRotator(-90.f, 0.f, 0.f));
 	for (UStaticMeshComponent* VM : { ViewModelBody.Get(), ViewModelBarrel.Get() })
 	{
 		VM->SetOnlyOwnerSee(true);
@@ -317,6 +325,24 @@ void AHLCharacter::Tick(float DeltaSeconds)
 	const UHLWeaponDefinition* Def = Weapon ? Weapon->GetCurrentWeapon() : nullptr;
 	const float AdsTime = Def ? FMath::Max(Def->AdsTime, 0.01f) : 0.18f;
 	AdsAlpha = FMath::FInterpConstantTo(AdsAlpha, bAds ? 1.f : 0.f, DeltaSeconds, 1.f / AdsTime);
+}
+
+void AHLCharacter::OnRep_ReplicatedMovement()
+{
+	if (GetLocalRole() == ROLE_SimulatedProxy)
+	{
+		return;
+	}
+	Super::OnRep_ReplicatedMovement();
+}
+
+void AHLCharacter::PostNetReceiveLocationAndRotation()
+{
+	if (GetLocalRole() == ROLE_SimulatedProxy)
+	{
+		return;
+	}
+	Super::PostNetReceiveLocationAndRotation();
 }
 
 void AHLCharacter::OnRep_Snapshot()

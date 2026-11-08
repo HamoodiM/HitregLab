@@ -8,9 +8,12 @@
 #include "Aim/HLAimAssistSettings.h"
 #include "Bots/HLBotController.h"
 #include "Level/HLLevelBuilder.h"
+#include "Measure/HLPeekMeterSubsystem.h"
+#include "Misc/CommandLine.h"
 #include "Weapons/HLWeaponDefinition.h"
 #include "HitregLab.h"
 #include "EngineUtils.h"
+#include "GameFramework/PlayerState.h"
 #include "TimerManager.h"
 
 AHLGameMode::AHLGameMode()
@@ -89,6 +92,30 @@ UHLAimAssistSettings* AHLGameMode::GetAimAssistSettings()
 AActor* AHLGameMode::ChoosePlayerStart_Implementation(AController* Player)
 {
 	return Super::ChoosePlayerStart_Implementation(Player);
+}
+
+void AHLGameMode::PostLogin(APlayerController* NewPlayer)
+{
+	Super::PostLogin(NewPlayer);
+	if (NewPlayer && NewPlayer->PlayerState)
+	{
+		NewPlayer->PlayerState->SetPlayerName(FString::Printf(TEXT("Player %d"), ++PlayerCounter));
+	}
+	// Unattended measurement: "-PeekSweep=N [-PeekFull] [-QuitAfterSweep]" on a dedicated server starts the
+	// peeker's-advantage sweep a few seconds after the second player joins
+	int32 Trials = 0;
+	if (PlayerCounter == 2 && FParse::Value(FCommandLine::Get(), TEXT("PeekSweep="), Trials) && Trials > 0)
+	{
+		const bool bFull = FParse::Param(FCommandLine::Get(), TEXT("PeekFull"));
+		FTimerHandle Handle;
+		GetWorldTimerManager().SetTimer(Handle, FTimerDelegate::CreateWeakLambda(this, [this, Trials, bFull]()
+		{
+			if (UHLPeekMeterSubsystem* Meter = GetWorld()->GetSubsystem<UHLPeekMeterSubsystem>())
+			{
+				UE_LOG(LogHitreg, Display, TEXT("%s"), *Meter->StartSweep(Trials, bFull));
+			}
+		}), 6.f, false);
+	}
 }
 
 void AHLGameMode::RestartPlayer(AController* NewPlayer)

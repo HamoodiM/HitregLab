@@ -33,6 +33,8 @@ public:
 	virtual void PossessedBy(AController* NewController) override;
 	virtual void OnRep_PlayerState() override;
 	virtual FRotator GetViewRotation() const override;
+	virtual void OnRep_ReplicatedMovement() override;
+	virtual void PostNetReceiveLocationAndRotation() override;
 
 	// --- Components ---
 

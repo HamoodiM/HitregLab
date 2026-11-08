@@ -25,7 +25,7 @@ PRESETS = {
                         spread_base=0.15, spread_per_shot=0.9, spread_max=2.5, spread_recovery=6.0,
                         recoil_pattern=[(2.2, 0.3)], ads_fov=40, aim_assist_scale=0.5, color=(0.25, 0.18, 0.12)),
     "DA_Launcher": dict(display_name="Launcher", fire_mode=unreal.HLFireMode.SEMI, rounds_per_minute=70, magazine_size=4, reload_time=2.6,
-                        damage=90, b_projectile=True, projectile_speed=4000, projectile_gravity_scale=0.6, splash_radius=250,
+                        damage=90, projectile=True, projectile_speed=4000, projectile_gravity_scale=0.6, splash_radius=250,
                         spread_base=0.0, spread_moving=0.0, recoil_pattern=[(3.5, 0.0)], aim_assist_scale=0.0,
                         color=(0.3, 0.12, 0.1)),
 }
@@ -67,16 +67,15 @@ def make_map(name, layout):
     les = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
     if eal.does_asset_exist(path):
         les.load_level(path)
-        world = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()
-        for actor in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.HLLevelBuilder):
-            actor.set_editor_property("layout", layout)
-            actor.rerun_construction_scripts()
     else:
         les.new_level(path)
+    world = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()
+    builders = unreal.GameplayStatics.get_all_actors_of_class(world, unreal.HLLevelBuilder)
+    if not builders:
         actor_sub = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
-        builder = actor_sub.spawn_actor_from_class(unreal.HLLevelBuilder, unreal.Vector(0, 0, 0))
+        builders = [actor_sub.spawn_actor_from_class(unreal.HLLevelBuilder, unreal.Vector(0, 0, 0))]
+    for builder in builders:
         builder.set_editor_property("layout", layout)
-        builder.rerun_construction_scripts()
     les.save_current_level()
     print(f"{name} ok")
 
@@ -87,3 +86,24 @@ def make_all():
     make_map("Lvl_Range", unreal.HLLayout.RANGE)
     make_map("Lvl_Peek", unreal.HLLayout.PEEK)
     make_map("Lvl_Arena", unreal.HLLayout.ARENA)
+
+
+def make_color_material():
+    """M_HLColor: flat colour from a 'Color' vector parameter (characters, guns and level blocks tint it)."""
+    path = "/Game/HitregLab/Materials"
+    full = f"{path}/M_HLColor"
+    if eal.does_asset_exist(full):
+        return unreal.load_asset(full)
+    mel = unreal.MaterialEditingLibrary
+    mat = asset_tools.create_asset("M_HLColor", path, unreal.Material, unreal.MaterialFactoryNew())
+    color = mel.create_material_expression(mat, unreal.MaterialExpressionVectorParameter, -400, 0)
+    color.set_editor_property("parameter_name", "Color")
+    color.set_editor_property("default_value", unreal.LinearColor(0.6, 0.6, 0.62, 1.0))
+    rough = mel.create_material_expression(mat, unreal.MaterialExpressionScalarParameter, -400, 200)
+    rough.set_editor_property("parameter_name", "Roughness")
+    rough.set_editor_property("default_value", 0.65)
+    mel.connect_material_property(color, "", unreal.MaterialProperty.MP_BASE_COLOR)
+    mel.connect_material_property(rough, "", unreal.MaterialProperty.MP_ROUGHNESS)
+    mel.recompile_material(mat)
+    eal.save_loaded_asset(mat)
+    return mat
