@@ -59,8 +59,8 @@ AHLReplayGhost::AHLReplayGhost()
 	ViewModel->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	ViewModel->SetCastShadow(false);
 	ViewModel->SetVisibility(false);
-	ViewModel->SetRelativeLocation(FVector(30.f, 11.f, -12.f));
-	ViewModel->SetRelativeScale3D(FVector(0.3f, 0.04f, 0.06f));
+	ViewModel->SetRelativeLocation(FVector(24.f, 13.f, -15.f));
+	ViewModel->SetRelativeScale3D(FVector(0.16f, 0.028f, 0.04f));
 	if (ColorMat.Succeeded())
 	{
 		for (UStaticMeshComponent* C : { Gun.Get(), ViewModel.Get() })

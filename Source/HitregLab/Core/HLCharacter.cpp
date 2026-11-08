@@ -22,7 +22,7 @@ namespace
 {
 	constexpr float CapsuleRadius = 34.f;
 	constexpr float CapsuleHalfHeight = 88.f;
-	const FVector ViewModelHip(26.f, 12.f, -13.f);
+	const FVector ViewModelHip(24.f, 13.f, -15.f);
 	const FVector ViewModelAds(26.f, 0.f, -6.2f);
 }
 
@@ -153,8 +153,8 @@ void AHLCharacter::BuildBody()
 	ViewModelRoot = CreateDefaultSubobject<USceneComponent>(TEXT("ViewModelRoot"));
 	ViewModelRoot->SetupAttachment(Camera);
 	ViewModelRoot->SetRelativeLocation(ViewModelHip);
-	ViewModelBody = MakePart(TEXT("ViewModelBody"), ViewModelRoot, CubeMesh.Object, FVector(0.f, 0.f, 0.f), FVector(0.22f, 0.035f, 0.05f));
-	ViewModelBarrel = MakePart(TEXT("ViewModelBarrel"), ViewModelRoot, CylinderMesh.Object, FVector(15.f, 0.f, 1.2f), FVector(0.018f, 0.018f, 0.1f), FRotator(-90.f, 0.f, 0.f));
+	ViewModelBody = MakePart(TEXT("ViewModelBody"), ViewModelRoot, CubeMesh.Object, FVector(0.f, 0.f, 0.f), FVector(0.16f, 0.028f, 0.04f));
+	ViewModelBarrel = MakePart(TEXT("ViewModelBarrel"), ViewModelRoot, CylinderMesh.Object, FVector(11.f, 0.f, 1.f), FVector(0.014f, 0.014f, 0.07f), FRotator(-90.f, 0.f, 0.f));
 	for (UStaticMeshComponent* VM : { ViewModelBody.Get(), ViewModelBarrel.Get() })
 	{
 		VM->SetOnlyOwnerSee(true);

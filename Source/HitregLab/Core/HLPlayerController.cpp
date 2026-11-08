@@ -22,7 +22,7 @@ namespace
 {
 	const int32 RttPresets[] = { 0, 50, 100, 150, 250 };
 	const int32 TickPresets[] = { 20, 30, 60, 128 };
-	const TCHAR* AimModeNames[] = { TEXT("Off"), TEXT("Slowdown only"), TEXT("Full") };
+	const TCHAR* PcAimModeNames[] = { TEXT("Off"), TEXT("Slowdown only"), TEXT("Full") };
 }
 
 AHLPlayerController::AHLPlayerController()
@@ -275,7 +275,7 @@ void AHLPlayerController::HLAimAssist(int32 Mode)
 {
 	const EHLAimAssistMode NewMode = EHLAimAssistMode(FMath::Clamp(Mode, 0, 2));
 	UHLAimAssistComponent::SetLocalMode(NewMode);
-	ShowToast(FString::Printf(TEXT("Aim assist: %s"), AimModeNames[int32(NewMode)]));
+	ShowToast(FString::Printf(TEXT("Aim assist: %s"), PcAimModeNames[int32(NewMode)]));
 }
 
 void AHLPlayerController::HLAimBench(int32 Trials)

@@ -1,6 +1,7 @@
 // Hitreg Lab: level builder
 #include "Level/HLLevelBuilder.h"
 #include "Components/DirectionalLightComponent.h"
+#include "Components/PostProcessComponent.h"
 #include "Components/ExponentialHeightFogComponent.h"
 #include "Components/SkyAtmosphereComponent.h"
 #include "Components/SkyLightComponent.h"
@@ -49,6 +50,17 @@ AHLLevelBuilder::AHLLevelBuilder()
 	Fog = CreateDefaultSubobject<UExponentialHeightFogComponent>(TEXT("Fog"));
 	Fog->SetupAttachment(Root);
 	Fog->SetFogDensity(0.004f);
+
+	// Calmer exposure and bloom: the flat-colour blocks read better slightly darker
+	Post = CreateDefaultSubobject<UPostProcessComponent>(TEXT("Post"));
+	Post->SetupAttachment(Root);
+	Post->bUnbound = true;
+	Post->Settings.bOverride_AutoExposureBias = true;
+	Post->Settings.AutoExposureBias = -0.4f;
+	Post->Settings.bOverride_BloomIntensity = true;
+	Post->Settings.BloomIntensity = 0.2f;
+	Post->Settings.bOverride_MotionBlurAmount = true;
+	Post->Settings.MotionBlurAmount = 0.f;
 }
 
 void AHLLevelBuilder::Clear()

@@ -15,9 +15,9 @@
 
 namespace
 {
-	constexpr float SettleSeconds = 2.5f;
-	constexpr float ShotGap = 0.35f;   // single taps, so bloom has recovered
-	constexpr float DrainSeconds = 1.0f; // let the last results come back
+	constexpr float BenchSettleSeconds = 2.5f;
+	constexpr float BenchShotGap = 0.35f;   // single taps, so bloom has recovered
+	constexpr float BenchDrainSeconds = 1.0f; // let the last results come back
 }
 
 UHLHitregBenchComponent::UHLHitregBenchComponent()
@@ -133,7 +133,7 @@ void UHLHitregBenchComponent::TickComponent(float DeltaTime, ELevelTick TickType
 	switch (Phase)
 	{
 	case EPhase::Settle:
-		if (PhaseTime >= SettleSeconds)
+		if (PhaseTime >= BenchSettleSeconds)
 		{
 			Phase = EPhase::Shooting;
 			PhaseTime = 0.f;
@@ -159,7 +159,7 @@ void UHLHitregBenchComponent::TickComponent(float DeltaTime, ELevelTick TickType
 			Me->Weapon->SetTriggerHeld(true); // one frame = one tap
 			bReleaseNextFrame = true;
 			++ShotsFired;
-			ShotTimer = ShotGap;
+			ShotTimer = BenchShotGap;
 		}
 		if (ShotsFired >= ShotsPer && ShotTimer <= 0.f)
 		{
@@ -168,7 +168,7 @@ void UHLHitregBenchComponent::TickComponent(float DeltaTime, ELevelTick TickType
 		}
 		break;
 	case EPhase::Drain:
-		if (PhaseTime >= DrainSeconds)
+		if (PhaseTime >= BenchDrainSeconds)
 		{
 			FRow Row;
 			Row.Config = Configs[ConfigIndex];

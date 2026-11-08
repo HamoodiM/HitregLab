@@ -83,6 +83,9 @@ private:
 	UPROPERTY(VisibleAnywhere)
 	TObjectPtr<UExponentialHeightFogComponent> Fog;
 
+	UPROPERTY(VisibleAnywhere)
+	TObjectPtr<class UPostProcessComponent> Post;
+
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<UStaticMeshComponent>> Built;
 

@@ -22,7 +22,7 @@ namespace
 	const FLinearColor Bad(1.f, 0.35f, 0.3f);
 	const FLinearColor Warn(1.f, 0.75f, 0.25f);
 	const FLinearColor Panel(0.f, 0.f, 0.f, 0.45f);
-	const TCHAR* AimModeNames[] = { TEXT("off"), TEXT("slowdown"), TEXT("full") };
+	const TCHAR* HudAimModeNames[] = { TEXT("off"), TEXT("slowdown"), TEXT("full") };
 }
 
 float AHLHUD::Scale() const
@@ -198,7 +198,7 @@ void AHLHUD::DrawNetOverlay(AHLPlayerController* PC, const AHLCharacter* Char)
 			Lines.Add({ FString::Printf(TEXT("Last hit: rewound %.0f ms, target moved %.0f cm since"), R.RewindMs, FVector::Dist(R.TracedPose.Location, R.CurrentPose.Location)), Dim });
 		}
 	}
-	Lines.Add({ FString::Printf(TEXT("Aim assist %s (%s)"), AimModeNames[int32(UHLAimAssistComponent::GetLocalMode(this))], PC->IsUsingGamepad() ? TEXT("gamepad") : TEXT("mouse: assist inactive")), Dim });
+	Lines.Add({ FString::Printf(TEXT("Aim assist %s (%s)"), HudAimModeNames[int32(UHLAimAssistComponent::GetLocalMode(this))], PC->IsUsingGamepad() ? TEXT("gamepad") : TEXT("mouse: assist inactive")), Dim });
 	if (PC->Peek && PC->Peek->GetRole() != EHLPeekRole::None)
 	{
 		Lines.Add({ PC->Peek->GetRole() == EHLPeekRole::Peeker ? TEXT("PEEK TEST: you are the peeker") : TEXT("PEEK TEST: you are the holder"), Warn });
