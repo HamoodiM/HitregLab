@@ -56,6 +56,7 @@ private:
 	void UpdatePlayback(float DeltaTime);
 	void HandleKeys();
 	void ApplyPlaybackTime(float PrevTime);
+	void LogSanity() const;
 
 	TMap<int32, FHLReplayTrack> Live; // absolute world times
 	TArray<FHLReplayShot> LiveShots;

@@ -9,6 +9,7 @@
 #include "HAL/FileManager.h"
 #include "Misc/DateTime.h"
 #include "Misc/Paths.h"
+#include "HitregLab.h"
 
 UHLReplayComponent::UHLReplayComponent()
 {
@@ -59,10 +60,18 @@ void UHLReplayComponent::TickComponent(float DeltaTime, ELevelTick TickType, FAc
 void UHLReplayComponent::Record()
 {
 	const float Now = float(GetWorld()->GetTimeSeconds());
+	TSet<int32> SeenIds;
 	for (TActorIterator<AHLCharacter> It(GetWorld()); It; ++It)
 	{
 		const AHLCharacter* Char = *It;
 		const int32 Id = Char->GetHLPlayerId();
+		bool bDuplicate = false;
+		SeenIds.Add(Id, &bDuplicate);
+		if (bDuplicate)
+		{
+			UE_LOG(LogHitreg, Warning, TEXT("Replay: two characters share player id %d; skipping %s so tracks don't merge"), Id, *Char->GetName());
+			continue;
+		}
 		FHLReplayTrack& Track = Live.FindOrAdd(Id);
 		Track.PlayerId = Id;
 		Track.Color = Char->GetBodyColor();
@@ -216,6 +225,7 @@ void UHLReplayComponent::Play(const FHLReplayClip& Clip)
 		}
 	}
 	ApplyPlaybackTime(0.f);
+	LogSanity();
 
 	APlayerController* PC = Cast<APlayerController>(GetOwner());
 	AHLReplayGhost* ViewGhost = KillerGhost ? KillerGhost : VictimGhost;
@@ -349,6 +359,38 @@ void UHLReplayComponent::ApplyPlaybackTime(float PrevTime)
 			DrawDebugPoint(GetWorld(), Shot.End, 8.f, Color, false, 0.3f);
 		}
 	}
+}
+
+void UHLReplayComponent::LogSanity() const
+{
+	// At the kill, the killer's recorded view should point at the victim. Logs the angle so a broken clip
+	// (merged tracks, wrong killer) shows up as a number instead of a vibe.
+	const FHLReplayTrack* Killer = Current.FindTrack(Current.KillerId);
+	const FHLReplayTrack* Victim = Current.FindTrack(Current.VictimId);
+	if (!Killer || !Victim)
+	{
+		UE_LOG(LogHitreg, Warning, TEXT("Kill cam: killer %d or victim %d has no track (%d tracks)"), Current.KillerId, Current.VictimId, Current.Tracks.Num());
+		return;
+	}
+	float Best = 180.f;
+	for (float T = Current.KillTime - 0.6f; T <= Current.KillTime + 0.05f; T += 1.f / 30.f)
+	{
+		FHLPose K, V;
+		bool bKA = true, bVA = true;
+		Killer->Sample(T, K, bKA);
+		Victim->Sample(T, V, bVA);
+		const FVector Eye = K.Location + FVector(0.f, 0.f, AHLCharacter::EyeHeight);
+		const FVector To = (V.Location + FVector(0.f, 0.f, 22.f) - Eye).GetSafeNormal();
+		const FVector Fwd = FRotator(K.Pitch, K.Yaw, 0.f).Vector();
+		Best = FMath::Min(Best, FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(FVector::DotProduct(Fwd, To), -1.f, 1.f))));
+	}
+	int32 KillerShots = 0;
+	for (const FHLReplayShot& S : Current.Shots)
+	{
+		KillerShots += S.ShooterId == Current.KillerId ? 1 : 0;
+	}
+	UE_LOG(LogHitreg, Display, TEXT("Kill cam: %d tracks, killer %d (%d keys, %d shots), victim %d; killer aim vs victim in the last 0.6 s: %.1f deg"),
+		Current.Tracks.Num(), Current.KillerId, Killer->Keys.Num(), KillerShots, Current.VictimId, Best);
 }
 
 FString UHLReplayComponent::GetKillerName() const

@@ -10,6 +10,7 @@
 #include "Level/HLLevelBuilder.h"
 #include "Measure/HLPeekMeterSubsystem.h"
 #include "Misc/CommandLine.h"
+#include "GameFramework/GameSession.h"
 #include "Weapons/HLWeaponDefinition.h"
 #include "HitregLab.h"
 #include "EngineUtils.h"
@@ -149,6 +150,10 @@ AHLCharacter* AHLGameMode::SpawnBot(const FString& Mode, const FTransform& Where
 	if (Bot->PlayerState)
 	{
 		Bot->PlayerState->SetPlayerName(FString::Printf(TEXT("Bot %d"), ++BotCounter));
+		// Only player controllers get an id from the game session (AGameSession::RegisterPlayer); AI player
+		// states keep the default 0. The kill feed, kill cam tracks and body colours all key on this id, so
+		// without a unique one every bot merged into one replay track.
+		Bot->PlayerState->SetPlayerId(GameSession ? GameSession->GetNextPlayerID() : 1000 + BotCounter);
 	}
 	AHLCharacter* Pawn = GetWorld()->SpawnActor<AHLCharacter>(AHLCharacter::StaticClass(), Where, Params);
 	if (Pawn)
