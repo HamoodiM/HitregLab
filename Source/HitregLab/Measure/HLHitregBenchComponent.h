@@ -4,6 +4,8 @@
 // For each simulated RTT, with lag compensation on and off, it counts how many shots the server confirmed.
 // Perfect aim on your own screen should mean ~100% registered with compensation, and much less without.
 // Start with "HLHitregBench [shots]" in the console, or -HitregBench=N on a client's command line.
+// -BenchRules instead compares rewind rules with compensation on: cap 200, cap 100, and the cover rule
+// (open-field targets: what each rule costs a shooter whose target is NOT in cover).
 #pragma once
 
 #include "CoreMinimal.h"
@@ -31,6 +33,9 @@ private:
 	{
 		int32 RttMs = 0;
 		bool bLagComp = true;
+		float MaxRewindMs = 200.f;
+		bool bCoverRule = false;
+		FString RuleName() const;
 	};
 	struct FRow
 	{

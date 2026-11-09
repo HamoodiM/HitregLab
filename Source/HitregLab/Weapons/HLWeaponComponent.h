@@ -59,6 +59,11 @@ public:
 	void RequestReload();
 	void SelectWeapon(int32 Index);
 	void CycleWeapon();
+	/**
+	 * Measurement scripts: fire one shot right now, at the current view rotation, against the poses drawn this
+	 * frame (call it after everything has moved, e.g. in TG_PostUpdateWork). Returns false if it can't fire.
+	 */
+	bool FireSingleNow();
 
 	// --- Queries ---
 	const UHLWeaponDefinition* GetCurrentWeapon() const;

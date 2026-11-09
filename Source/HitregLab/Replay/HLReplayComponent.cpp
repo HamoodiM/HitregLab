@@ -1,6 +1,7 @@
 // Hitreg Lab: kill cam recorder and player
 #include "Replay/HLReplayComponent.h"
 #include "Replay/HLReplayGhost.h"
+#include "Autopsy/HLShotAutopsySubsystem.h"
 #include "Core/HLCharacter.h"
 #include "Core/HLPlayerController.h"
 #include "DrawDebugHelpers.h"
@@ -401,18 +402,29 @@ FString UHLReplayComponent::GetKillerName() const
 
 FString UHLReplayComponent::SaveLastKillCam()
 {
-	if (!LastKillCam.IsValid())
+	// The last kill cam if there is one, else the last 8 s of recording; either way with this machine's
+	// Shot Autopsy records (the newest 256), so "HLAutopsyLoad <file>" can reopen the verdicts later
+	FHLReplayClip Clip = LastKillCam.IsValid() ? LastKillCam : BuildClip(RecordSeconds, INDEX_NONE, INDEX_NONE, 0.f);
+	if (const UHLShotAutopsySubsystem* Log = GetWorld()->GetSubsystem<UHLShotAutopsySubsystem>())
 	{
-		return TEXT("No kill cam recorded yet");
+		const TArray<FHLShotAutopsy>& All = Log->GetRecords();
+		for (int32 i = FMath::Max(0, All.Num() - 256); i < All.Num(); ++i)
+		{
+			Clip.Autopsies.Add(All[i]);
+		}
+	}
+	if (!Clip.IsValid() && Clip.Autopsies.Num() == 0)
+	{
+		return TEXT("Nothing recorded yet");
 	}
 	const FString Dir = FPaths::ProjectSavedDir() / TEXT("Replays");
 	IFileManager::Get().MakeDirectory(*Dir, true);
-	const FString Path = Dir / FString::Printf(TEXT("killcam_%s.hlreplay"), *FDateTime::Now().ToString(TEXT("%Y%m%d_%H%M%S")));
-	if (!LastKillCam.SaveToFile(Path))
+	const FString Path = Dir / FString::Printf(TEXT("%s_%s.hlreplay"), LastKillCam.IsValid() ? TEXT("killcam") : TEXT("session"), *FDateTime::Now().ToString(TEXT("%Y%m%d_%H%M%S")));
+	if (!Clip.SaveToFile(Path))
 	{
 		return TEXT("Saving the replay failed");
 	}
-	return FString::Printf(TEXT("Saved %s (%d bytes, %.0f B/s per player)"), *FPaths::GetCleanFilename(Path), LastKillCam.ToBytes().Num(), LastKillCam.BytesPerSecondPerPlayer());
+	return FString::Printf(TEXT("Saved %s (%d bytes, %d shot autopsies)"), *FPaths::GetCleanFilename(Path), Clip.ToBytes().Num(), Clip.Autopsies.Num());
 }
 
 FString UHLReplayComponent::LoadAndPlay(const FString& Path)

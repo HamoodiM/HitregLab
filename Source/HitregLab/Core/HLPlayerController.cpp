@@ -8,6 +8,9 @@
 #include "Replay/HLReplayComponent.h"
 #include "Measure/HLPeekComponent.h"
 #include "Measure/HLHitregBenchComponent.h"
+#include "Measure/HLCoverComponent.h"
+#include "Autopsy/HLAutopsyViewerComponent.h"
+#include "Autopsy/HLShotAutopsySubsystem.h"
 #include "Weapons/HLWeaponComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "Engine/LocalPlayer.h"
@@ -31,6 +34,8 @@ AHLPlayerController::AHLPlayerController()
 	Replay = CreateDefaultSubobject<UHLReplayComponent>(TEXT("Replay"));
 	Peek = CreateDefaultSubobject<UHLPeekComponent>(TEXT("Peek"));
 	HitregBench = CreateDefaultSubobject<UHLHitregBenchComponent>(TEXT("HitregBench"));
+	Cover = CreateDefaultSubobject<UHLCoverComponent>(TEXT("Cover"));
+	Autopsy = CreateDefaultSubobject<UHLAutopsyViewerComponent>(TEXT("Autopsy"));
 }
 
 const FHLInputActions& AHLPlayerController::GetActions()
@@ -205,6 +210,14 @@ void AHLPlayerController::PlayerTick(float DeltaTime)
 	{
 		HLAddBot(TEXT("fight"));
 	}
+	if (WasInputKeyJustPressed(EKeys::F11) && GS)
+	{
+		HLCoverRule(GS->bCoverRule ? 0 : 1, GS->CoverRuleBudgetMs);
+	}
+	if (WasInputKeyJustPressed(EKeys::Tab))
+	{
+		HLAutopsy();
+	}
 }
 
 void AHLPlayerController::ApplyClientPacketSim()
@@ -334,6 +347,86 @@ void AHLPlayerController::HLSaveReplay()
 	if (Replay)
 	{
 		ShowToast(Replay->SaveLastKillCam());
+	}
+}
+
+void AHLPlayerController::HLCoverSweep(int32 TrialsPerConfig)
+{
+	if (Cover)
+	{
+		Cover->Server_StartSweep(TrialsPerConfig);
+	}
+}
+
+void AHLPlayerController::HLCoverRule(int32 bEnable, float BudgetMs)
+{
+	const AHLGameState* GS = GetWorld()->GetGameState<AHLGameState>();
+	Server_SetRewindRule(GS ? GS->MaxRewindMs : 200.f, bEnable != 0, BudgetMs);
+	ShowToast(bEnable ? FString::Printf(TEXT("Cover rule ON: a target already in cover is rewound at most %.0f ms"), BudgetMs)
+		: FString(TEXT("Cover rule OFF: classic favour-the-shooter rewind")));
+}
+
+void AHLPlayerController::HLMaxRewind(float Ms)
+{
+	const AHLGameState* GS = GetWorld()->GetGameState<AHLGameState>();
+	Server_SetRewindRule(Ms, GS ? GS->bCoverRule : false, GS ? GS->CoverRuleBudgetMs : 100.f);
+	ShowToast(FString::Printf(TEXT("Rewind cap %.0f ms"), Ms));
+}
+
+void AHLPlayerController::Server_SetRewindRule_Implementation(float MaxRewindMs, bool bCoverRule, float CoverBudgetMs)
+{
+	if (AHLGameState* GS = GetWorld()->GetGameState<AHLGameState>())
+	{
+		GS->MaxRewindMs = FMath::Clamp(MaxRewindMs, 0.f, 900.f); // history holds 1 s
+		GS->bCoverRule = bCoverRule;
+		GS->CoverRuleBudgetMs = FMath::Clamp(CoverBudgetMs, 0.f, 900.f);
+	}
+}
+
+void AHLPlayerController::HLAutopsy()
+{
+	if (Autopsy)
+	{
+		Autopsy->Toggle();
+	}
+}
+
+void AHLPlayerController::HLAutopsyLoad(const FString& File)
+{
+	if (Autopsy)
+	{
+		ShowToast(Autopsy->LoadFile(File));
+	}
+}
+
+void AHLPlayerController::HLAutopsyCsv()
+{
+	if (GetNetMode() == NM_Client)
+	{
+		Server_AutopsyCsv(); // the full log lives on the server
+		ShowToast(TEXT("Shot autopsy CSV written on the server (Saved/Measure)"));
+	}
+	else if (const UHLShotAutopsySubsystem* Log = GetWorld()->GetSubsystem<UHLShotAutopsySubsystem>())
+	{
+		ShowToast(Log->WriteCsv());
+	}
+}
+
+void AHLPlayerController::Server_AutopsyCsv_Implementation()
+{
+	if (const UHLShotAutopsySubsystem* Log = GetWorld()->GetSubsystem<UHLShotAutopsySubsystem>())
+	{
+		UE_LOG(LogTemp, Display, TEXT("[HitregLab] Shot autopsy: %s"), *Log->WriteCsv());
+	}
+}
+
+void AHLPlayerController::Client_AutopsyRecord_Implementation(const TArray<uint8>& Bytes)
+{
+	FHLShotAutopsy Record;
+	UHLShotAutopsySubsystem* Log = GetWorld()->GetSubsystem<UHLShotAutopsySubsystem>();
+	if (Log && Record.FromBytes(Bytes))
+	{
+		Log->AddReceived(Record);
 	}
 }
 

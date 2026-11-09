@@ -28,6 +28,16 @@ public:
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Lab")
 	float MaxRewindMs = 200.f;
 
+	/**
+	 * Cover rule: against a target that is already out of the shooter's sight on the server, rewind at most
+	 * CoverRuleBudgetMs. Off by default (classic favour-the-shooter). See HLRewindRules.h.
+	 */
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Lab")
+	bool bCoverRule = false;
+
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Lab")
+	float CoverRuleBudgetMs = 100.f;
+
 	/** Round trip added by packet simulation (half each way), for the HUD. */
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Lab")
 	int32 SimulatedRttMs = 0;

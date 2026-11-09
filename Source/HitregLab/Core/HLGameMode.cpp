@@ -9,6 +9,7 @@
 #include "Bots/HLBotController.h"
 #include "Level/HLLevelBuilder.h"
 #include "Measure/HLPeekMeterSubsystem.h"
+#include "Measure/HLCoverMeterSubsystem.h"
 #include "Misc/CommandLine.h"
 #include "GameFramework/GameSession.h"
 #include "Weapons/HLWeaponDefinition.h"
@@ -114,6 +115,18 @@ void AHLGameMode::PostLogin(APlayerController* NewPlayer)
 			if (UHLPeekMeterSubsystem* Meter = GetWorld()->GetSubsystem<UHLPeekMeterSubsystem>())
 			{
 				UE_LOG(LogHitreg, Display, TEXT("%s"), *Meter->StartSweep(Trials, bFull));
+			}
+		}), 6.f, false);
+	}
+	// "-CoverSweep=N [-CoverRtt=N] [-CoverConfigs=base] [-QuitAfterSweep]": behind-cover deaths sweep
+	if (PlayerCounter == 2 && FParse::Value(FCommandLine::Get(), TEXT("CoverSweep="), Trials) && Trials > 0)
+	{
+		FTimerHandle Handle;
+		GetWorldTimerManager().SetTimer(Handle, FTimerDelegate::CreateWeakLambda(this, [this, Trials]()
+		{
+			if (UHLCoverMeterSubsystem* Meter = GetWorld()->GetSubsystem<UHLCoverMeterSubsystem>())
+			{
+				UE_LOG(LogHitreg, Display, TEXT("%s"), *Meter->StartSweep(Trials));
 			}
 		}), 6.f, false);
 	}

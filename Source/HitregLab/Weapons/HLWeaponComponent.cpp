@@ -1,6 +1,7 @@
 // Hitreg Lab: weapon component
 #include "Weapons/HLWeaponComponent.h"
 #include "Aim/HLAimAssistComponent.h"
+#include "Autopsy/HLShotAutopsySubsystem.h"
 #include "Core/HLCharacter.h"
 #include "Core/HLGameMode.h"
 #include "Core/HLGameState.h"
@@ -204,6 +205,17 @@ void UHLWeaponComponent::SelectWeapon(int32 Index)
 	{
 		Server_SelectWeapon(uint8(Index));
 	}
+}
+
+bool UHLWeaponComponent::FireSingleNow()
+{
+	const AHLCharacter* Char = GetCharacter();
+	if (!GetCurrentWeapon() || !Char || !Char->IsAlive() || !IsLocallyDriven() || IsReloading() || GetAmmo() <= 0)
+	{
+		return false;
+	}
+	FireShot(GetWorld()->GetTimeSeconds());
+	return true;
 }
 
 void UHLWeaponComponent::CycleWeapon()
@@ -446,6 +458,9 @@ FHLShotResult UHLWeaponComponent::ServerProcessShot(const FHLShotRequest& Reques
 	FHLShotResult Result;
 	Result.ShotSeq = Request.ShotSeq;
 	AHLCharacter* Char = GetCharacter();
+	UHLShotAutopsySubsystem* Autopsy = GetWorld()->GetSubsystem<UHLShotAutopsySubsystem>();
+	// The listen-server host and bots see the world as it is now: nothing to rewind
+	const double ViewTime = bValidate ? Request.ViewTime : GetWorld()->GetTimeSeconds();
 	if (bValidate)
 	{
 		FName Reason;
@@ -454,6 +469,10 @@ FHLShotResult UHLWeaponComponent::ServerProcessShot(const FHLShotRequest& Reques
 			Result.bRejected = true;
 			Result.RejectReason = Reason;
 			UE_LOG(LogHitreg, Verbose, TEXT("Shot %d rejected: %s"), Request.ShotSeq, *Reason.ToString());
+			if (Autopsy)
+			{
+				Autopsy->ServerRecord(Char, Request, ViewTime, Reason, false, nullptr, false, 0.f, false);
+			}
 			return Result;
 		}
 	}
@@ -478,13 +497,15 @@ FHLShotResult UHLWeaponComponent::ServerProcessShot(const FHLShotRequest& Reques
 		{
 			P->Init(Def);
 		}
+		if (Autopsy)
+		{
+			Autopsy->ServerRecord(Char, Request, ViewTime, NAME_None, true, nullptr, false, 0.f, false);
+		}
 		return Result;
 	}
 
 	UHLLagCompensationSubsystem* LagComp = GetWorld()->GetSubsystem<UHLLagCompensationSubsystem>();
 	FHLTraceHit Hit;
-	// The listen-server host and bots see the world as it is now: nothing to rewind
-	const double ViewTime = bValidate ? Request.ViewTime : GetWorld()->GetTimeSeconds();
 	const bool bHit = LagComp && LagComp->TraceShot(Char, Request.Origin, Dir, Def->Range, ViewTime, Hit);
 	Result.RewindMs = Hit.RewindSeconds * 1000.f;
 	if (bHit && Hit.Target.IsValid())
@@ -501,6 +522,10 @@ FHLShotResult UHLWeaponComponent::ServerProcessShot(const FHLShotRequest& Reques
 		Result.TracedPose = Hit.TracedPose;
 		Result.CurrentPose = Hit.CurrentPose;
 		Result.bKill = Hit.Target->ServerApplyDamage(Damage, Char->GetController(), Hit.Hit.Zone, Def->DisplayName.ToString());
+	}
+	if (Autopsy && LagComp)
+	{
+		Autopsy->ServerRecord(Char, Request, ViewTime, NAME_None, false, &Hit, bHit && Hit.Target.IsValid(), Result.Damage, Result.bKill);
 	}
 	Multicast_ShotFX(FVector(Request.Origin) + FVector(0, 0, -8), Hit.End, bHit);
 	return Result;

@@ -19,6 +19,8 @@ void AHLGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 	DOREPLIFETIME(AHLGameState, ServerTickRate);
 	DOREPLIFETIME(AHLGameState, bLagCompensation);
 	DOREPLIFETIME(AHLGameState, MaxRewindMs);
+	DOREPLIFETIME(AHLGameState, bCoverRule);
+	DOREPLIFETIME(AHLGameState, CoverRuleBudgetMs);
 	DOREPLIFETIME(AHLGameState, SimulatedRttMs);
 	DOREPLIFETIME(AHLGameState, SimulatedJitterMs);
 	DOREPLIFETIME(AHLGameState, AvgTraceMicros);

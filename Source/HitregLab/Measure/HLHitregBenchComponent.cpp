@@ -38,20 +38,35 @@ void UHLHitregBenchComponent::BeginPlay()
 	}
 }
 
+FString UHLHitregBenchComponent::FConfig::RuleName() const
+{
+	return bCoverRule ? FString::Printf(TEXT("cover_rule_100_cap_%.0f"), MaxRewindMs) : FString::Printf(TEXT("cap_%.0f"), MaxRewindMs);
+}
+
 void UHLHitregBenchComponent::Start(int32 ShotsPerConfig)
 {
 	Configs.Reset();
 	// -BenchRtt=N runs just that RTT (on, then off): used to record the comparison clip
 	int32 OnlyRtt = -1;
 	FParse::Value(FCommandLine::Get(), TEXT("BenchRtt="), OnlyRtt);
+	const bool bRules = FParse::Param(FCommandLine::Get(), TEXT("BenchRules"));
 	for (const int32 Rtt : { 0, 50, 100, 150, 250 })
 	{
 		if (OnlyRtt >= 0 && Rtt != OnlyRtt)
 		{
 			continue;
 		}
-		Configs.Add({ Rtt, true });
-		Configs.Add({ Rtt, false });
+		if (bRules)
+		{
+			Configs.Add({ Rtt, true, 200.f, false });
+			Configs.Add({ Rtt, true, 100.f, false });
+			Configs.Add({ Rtt, true, 200.f, true });
+		}
+		else
+		{
+			Configs.Add({ Rtt, true });
+			Configs.Add({ Rtt, false });
+		}
 	}
 	ShotsPer = FMath::Max(5, ShotsPerConfig);
 	ConfigIndex = 0;
@@ -66,9 +81,10 @@ void UHLHitregBenchComponent::BeginConfig()
 	const AHLGameState* GS = GetWorld()->GetGameState<AHLGameState>();
 	PC->Server_SetNet(GS ? GS->ServerTickRate : 60, C.RttMs, 0);
 	PC->Server_SetLagComp(C.bLagComp);
+	PC->Server_SetRewindRule(C.MaxRewindMs, C.bCoverRule, 100.f);
 	Phase = EPhase::Settle;
 	PhaseTime = 0.f;
-	UE_LOG(LogHitreg, Display, TEXT("Hitreg bench %d/%d: RTT %d ms, lag compensation %s"), ConfigIndex + 1, Configs.Num(), C.RttMs, C.bLagComp ? TEXT("on") : TEXT("off"));
+	UE_LOG(LogHitreg, Display, TEXT("Hitreg bench %d/%d: RTT %d ms, lag compensation %s, %s"), ConfigIndex + 1, Configs.Num(), C.RttMs, C.bLagComp ? TEXT("on") : TEXT("off"), *C.RuleName());
 }
 
 AHLCharacter* UHLHitregBenchComponent::FindTarget() const
@@ -197,13 +213,13 @@ void UHLHitregBenchComponent::TickComponent(float DeltaTime, ELevelTick TickType
 void UHLHitregBenchComponent::Finish()
 {
 	Phase = EPhase::Idle;
-	FString Csv = TEXT("rtt_ms,lag_compensation,shots,predicted_hits,confirmed_hits,confirmed_pct,mean_rewind_ms\n");
+	FString Csv = TEXT("rtt_ms,lag_compensation,shots,predicted_hits,confirmed_hits,confirmed_pct,mean_rewind_ms,rule\n");
 	FString Summary;
 	for (const FRow& R : Rows)
 	{
 		const float Pct = R.Shots > 0 ? 100.f * R.Confirmed / R.Shots : 0.f;
-		Csv += FString::Printf(TEXT("%d,%d,%d,%d,%d,%.1f,%.1f\n"), R.Config.RttMs, R.Config.bLagComp ? 1 : 0, R.Shots, R.Predicted, R.Confirmed, Pct, R.MeanRewindMs);
-		Summary += FString::Printf(TEXT("%dms %s %.0f%%  "), R.Config.RttMs, R.Config.bLagComp ? TEXT("on") : TEXT("off"), Pct);
+		Csv += FString::Printf(TEXT("%d,%d,%d,%d,%d,%.1f,%.1f,%s\n"), R.Config.RttMs, R.Config.bLagComp ? 1 : 0, R.Shots, R.Predicted, R.Confirmed, Pct, R.MeanRewindMs, *R.Config.RuleName());
+		Summary += FString::Printf(TEXT("%dms %s %s %.0f%%  "), R.Config.RttMs, R.Config.bLagComp ? TEXT("on") : TEXT("off"), *R.Config.RuleName(), Pct);
 	}
 	const FString Dir = FPaths::ProjectSavedDir() / TEXT("Measure");
 	IFileManager::Get().MakeDirectory(*Dir, true);
@@ -215,6 +231,7 @@ void UHLHitregBenchComponent::Finish()
 		PC->ShowToast(TEXT("Hitreg bench: ") + Summary);
 		PC->Server_SetNet(60, 0, 0);
 		PC->Server_SetLagComp(true);
+		PC->Server_SetRewindRule(200.f, false, 100.f);
 	}
 	if (FParse::Param(FCommandLine::Get(), TEXT("QuitAfterBench")))
 	{

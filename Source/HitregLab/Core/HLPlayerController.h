@@ -2,7 +2,8 @@
 // local lab settings (interpolation delay, sensitivity) and the debug keys / console commands.
 //
 // Keys: F1 net overlay, F2 lag compensation, F3 simulated RTT, F4 tick rate, F5 interpolation ticks,
-//       F6 aim assist mode, F7 rewind debug draw, F8 save kill cam replay, F9 aim benchmark, F10 add bot.
+//       F6 aim assist mode, F7 rewind debug draw, F8 save kill cam replay, F9 aim benchmark, F10 add bot,
+//       F11 cover rule, Tab Shot Autopsy viewer.
 #pragma once
 
 #include "CoreMinimal.h"
@@ -60,6 +61,12 @@ public:
 	UPROPERTY(VisibleAnywhere, Category = "Lab")
 	TObjectPtr<class UHLHitregBenchComponent> HitregBench;
 
+	UPROPERTY(VisibleAnywhere, Category = "Lab")
+	TObjectPtr<class UHLCoverComponent> Cover;
+
+	UPROPERTY(VisibleAnywhere, Category = "Lab")
+	TObjectPtr<class UHLAutopsyViewerComponent> Autopsy;
+
 	/** Degrees per mouse count. */
 	UPROPERTY(EditAnywhere, Category = "Lab")
 	float MouseSensitivity = 0.07f;
@@ -90,6 +97,15 @@ public:
 	/** Peeker's-advantage sweep (needs 2 connected players). Full=1 runs the whole RTT x tick grid. */
 	UFUNCTION(Exec) void HLPeekSweep(int32 TrialsPerConfig = 10, int32 Full = 1);
 	UFUNCTION(Exec) void HLSaveReplay();
+	/** Behind-cover deaths sweep (needs 2 connected players on Lvl_Peek). */
+	UFUNCTION(Exec) void HLCoverSweep(int32 TrialsPerConfig = 12);
+	/** Cover rule on/off; BudgetMs = how far back a target already in cover may still be rewound. */
+	UFUNCTION(Exec) void HLCoverRule(int32 bEnable, float BudgetMs = 100.f);
+	UFUNCTION(Exec) void HLMaxRewind(float Ms);
+	/** Shot Autopsy: open/close the viewer, load the records saved in a .hlreplay, write this session's CSV. */
+	UFUNCTION(Exec) void HLAutopsy();
+	UFUNCTION(Exec) void HLAutopsyLoad(const FString& File);
+	UFUNCTION(Exec) void HLAutopsyCsv();
 
 	UFUNCTION(Server, Reliable)
 	void Server_SetLagComp(bool bEnable);
@@ -99,6 +115,16 @@ public:
 
 	UFUNCTION(Server, Reliable)
 	void Server_AddBot(const FString& Mode);
+
+	UFUNCTION(Server, Reliable)
+	void Server_SetRewindRule(float MaxRewindMs, bool bCoverRule, float CoverBudgetMs);
+
+	UFUNCTION(Server, Reliable)
+	void Server_AutopsyCsv();
+
+	/** Server -> the two players involved in a shot: its finished Shot Autopsy record (serialized). */
+	UFUNCTION(Client, Reliable)
+	void Client_AutopsyRecord(const TArray<uint8>& Bytes);
 
 private:
 	void CreateInput();

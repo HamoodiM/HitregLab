@@ -86,24 +86,32 @@ const FHLReplayTrack* FHLReplayClip::FindTrack(int32 PlayerId) const
 	return Tracks.FindByPredicate([PlayerId](const FHLReplayTrack& T) { return T.PlayerId == PlayerId; });
 }
 
-bool FHLReplayClip::Serialize(FArchive& Ar)
+bool FHLReplayClip::Serialize(FArchive& Ar, int32 WriteVersion)
 {
 	uint32 FileMagic = Magic;
-	int32 FileVersion = Version;
+	int32 FileVersion = FMath::Clamp(WriteVersion, 1, Version);
 	Ar << FileMagic << FileVersion;
 	if (Ar.IsLoading() && (FileMagic != Magic || FileVersion > Version || FileVersion < 1))
 	{
 		return false; // not a replay, or written by a newer build: refuse rather than misread
 	}
 	Ar << Duration << KillerId << VictimId << KillTime << Tracks << Shots;
+	if (FileVersion >= 2)
+	{
+		Ar << Autopsies;
+	}
+	else if (Ar.IsLoading())
+	{
+		Autopsies.Reset();
+	}
 	return !Ar.IsError();
 }
 
-TArray<uint8> FHLReplayClip::ToBytes() const
+TArray<uint8> FHLReplayClip::ToBytes(int32 WriteVersion) const
 {
 	TArray<uint8> Bytes;
 	FMemoryWriter Writer(Bytes);
-	const_cast<FHLReplayClip*>(this)->Serialize(Writer);
+	const_cast<FHLReplayClip*>(this)->Serialize(Writer, WriteVersion);
 	return Bytes;
 }
 

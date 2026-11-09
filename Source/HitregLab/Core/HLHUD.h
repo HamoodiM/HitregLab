@@ -26,6 +26,7 @@ private:
 	void DrawKillFeed();
 	void DrawToast(AHLPlayerController* PC);
 	void DrawKillCam(AHLPlayerController* PC);
+	void DrawAutopsy(AHLPlayerController* PC);
 	void Text(const FString& S, float X, float Y, const FLinearColor& Color, float Scale = 1.f, bool bShadow = true);
 	float Scale() const;
 };

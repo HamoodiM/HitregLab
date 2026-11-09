@@ -4,21 +4,9 @@
 
 #include "CoreMinimal.h"
 #include "Core/HLTypes.h"
+#include "Replay/HLQuantPose.h"
+#include "Autopsy/HLShotAutopsy.h"
 
-/** A pose packed into 16 bytes: position in millimetres, yaw in 1/65536 turns, pitch in 1/32767 of 90 degrees. */
-struct HITREGLAB_API FHLQuantPose
-{
-	int32 X = 0;
-	int32 Y = 0;
-	int32 Z = 0;
-	uint16 Yaw = 0;
-	int16 Pitch = 0;
-
-	static FHLQuantPose Quantize(const FHLPose& Pose);
-	FHLPose Dequantize() const;
-	bool operator==(const FHLQuantPose& O) const { return X == O.X && Y == O.Y && Z == O.Z && Yaw == O.Yaw && Pitch == O.Pitch; }
-	friend FArchive& operator<<(FArchive& Ar, FHLQuantPose& P);
-};
 
 struct HITREGLAB_API FHLReplayKey
 {
@@ -56,7 +44,8 @@ struct HITREGLAB_API FHLReplayShot
 struct HITREGLAB_API FHLReplayClip
 {
 	static constexpr uint32 Magic = 0x484C5250; // "HLRP"
-	static constexpr int32 Version = 1;
+	/** 1: tracks and shots. 2: + Shot Autopsy records. Version 1 files still load (with no autopsies). */
+	static constexpr int32 Version = 2;
 
 	float Duration = 0.f;
 	int32 KillerId = INDEX_NONE;
@@ -65,15 +54,18 @@ struct HITREGLAB_API FHLReplayClip
 	float KillTime = 0.f;
 	TArray<FHLReplayTrack> Tracks;
 	TArray<FHLReplayShot> Shots;
+	/** Server verdicts for the shots this machine fired or was shot by (version 2+). */
+	TArray<FHLShotAutopsy> Autopsies;
 
 	const FHLReplayTrack* FindTrack(int32 PlayerId) const;
 	bool IsValid() const { return Tracks.Num() > 0 && Duration > 0.f; }
 
 	/** Serializes with a magic number and version; loading a newer version fails cleanly. Returns false on bad data. */
-	bool Serialize(FArchive& Ar);
+	bool Serialize(FArchive& Ar, int32 WriteVersion = Version);
 	bool SaveToFile(const FString& Path) const;
 	bool LoadFromFile(const FString& Path);
-	TArray<uint8> ToBytes() const;
+	/** WriteVersion < Version writes an older layout (tests use it to check old files still load). */
+	TArray<uint8> ToBytes(int32 WriteVersion = Version) const;
 	bool FromBytes(const TArray<uint8>& Bytes);
 
 	/** Hash of the quantized content (equal clips hash equal). */

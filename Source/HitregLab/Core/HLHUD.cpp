@@ -5,6 +5,9 @@
 #include "Core/HLGameState.h"
 #include "Core/HLPlayerController.h"
 #include "Measure/HLPeekComponent.h"
+#include "Measure/HLCoverComponent.h"
+#include "Autopsy/HLAutopsyViewerComponent.h"
+#include "Autopsy/HLShotAutopsySubsystem.h"
 #include "Net/HLServerClockComponent.h"
 #include "Replay/HLReplayComponent.h"
 #include "Weapons/HLWeaponComponent.h"
@@ -55,6 +58,12 @@ void AHLHUD::DrawHUD()
 	if (PC->Replay && PC->Replay->IsPlaying())
 	{
 		DrawKillCam(PC);
+		DrawToast(PC);
+		return;
+	}
+	if (PC->Autopsy && PC->Autopsy->IsOpen())
+	{
+		DrawAutopsy(PC);
 		DrawToast(PC);
 		return;
 	}
@@ -182,7 +191,9 @@ void AHLHUD::DrawNetOverlay(AHLPlayerController* PC, const AHLCharacter* Char)
 	const double Rtt = PC->Clock ? PC->Clock->GetRttMs() : 0.0;
 	Lines.Add({ FString::Printf(TEXT("Net: %s   RTT %.0f ms (sim %d, jitter %d)"), bClient ? TEXT("client") : TEXT("server/host"), Rtt, GS->SimulatedRttMs, GS->SimulatedJitterMs), White });
 	Lines.Add({ FString::Printf(TEXT("Tick %d Hz   interp %d ticks = %.0f ms"), GS->ServerTickRate, PC->InterpTicks, GS->GetInterpDelaySeconds(PC->InterpTicks) * 1000.0), White });
-	Lines.Add({ FString::Printf(TEXT("Lag compensation %s   max rewind %.0f ms"), GS->bLagCompensation ? TEXT("ON") : TEXT("OFF"), GS->MaxRewindMs), GS->bLagCompensation ? Good : Bad });
+	const FString CoverRule = GS->bCoverRule ? FString::Printf(TEXT("ON (%.0f ms)"), GS->CoverRuleBudgetMs) : FString(TEXT("off"));
+	Lines.Add({ FString::Printf(TEXT("Lag compensation %s   max rewind %.0f ms   cover rule %s"), GS->bLagCompensation ? TEXT("ON") : TEXT("OFF"), GS->MaxRewindMs, *CoverRule),
+		GS->bLagCompensation ? Good : Bad });
 	if (PC->Clock && bClient)
 	{
 		Lines.Add({ FString::Printf(TEXT("Clock sync %s   engine GameState clock off by %+.0f ms"), PC->Clock->IsSynced() ? TEXT("ok") : TEXT("..."), PC->Clock->GetEngineClockErrorMs()), Dim });
@@ -203,9 +214,13 @@ void AHLHUD::DrawNetOverlay(AHLPlayerController* PC, const AHLCharacter* Char)
 	{
 		Lines.Add({ PC->Peek->GetRole() == EHLPeekRole::Peeker ? TEXT("PEEK TEST: you are the peeker") : TEXT("PEEK TEST: you are the holder"), Warn });
 	}
-	Lines.Add({ TEXT("F1 overlay  F2 lag comp  F3 RTT  F4 tick  F5 interp  F6 assist  F7 rewind view  F8 save replay  F9 aim bench  F10 bot"), FLinearColor(0.7f, 0.7f, 0.7f, 0.8f) });
+	if (PC->Cover && PC->Cover->GetRole() != EHLCoverRole::None)
+	{
+		Lines.Add({ PC->Cover->GetRole() == EHLCoverRole::Runner ? TEXT("COVER TEST: you run for cover") : TEXT("COVER TEST: you shoot at the last moment"), Warn });
+	}
+	Lines.Add({ TEXT("F1 overlay  F2 lag comp  F3 RTT  F4 tick  F5 interp  F6 assist  F7 rewind view  F8 save replay  F9 aim bench  F10 bot  F11 cover rule  Tab shot autopsy"), FLinearColor(0.7f, 0.7f, 0.7f, 0.8f) });
 
-	DrawRect(Panel, X - 10.f * S, Y - 8.f * S, 860.f * S, Line * Lines.Num() + 12.f * S);
+	DrawRect(Panel, X - 10.f * S, Y - 8.f * S, 1010.f * S, Line * Lines.Num() + 12.f * S);
 	for (const auto& L : Lines)
 	{
 		Text(L.Key, X, Y, L.Value, 0.8f);
@@ -319,4 +334,134 @@ void AHLHUD::DrawKillCam(AHLPlayerController* PC)
 		}
 	}
 	Text(TEXT("Space pause   Left/Right scrub   Up/Down speed   Enter skip"), X0, Y + 18.f * S, Dim, 0.75f);
+}
+
+void AHLHUD::DrawAutopsy(AHLPlayerController* PC)
+{
+	const UHLAutopsyViewerComponent* V = PC->Autopsy;
+	const float S = Scale();
+	const float W = Canvas->ClipX;
+	const float H = Canvas->ClipY;
+	const FLinearColor Key(0.7f, 0.7f, 0.7f, 0.85f);
+	auto C = [](const FColor& Col) { return FLinearColor(Col); };
+
+	// Title bar
+	DrawRect(FLinearColor(0.f, 0.f, 0.f, 0.6f), 0.f, 0.f, W, 54.f * S);
+	Text(TEXT("SHOT AUTOPSY"), 24.f * S, 14.f * S, Warn, 1.15f);
+	const FString Source = V->IsShowingFile() ? FString::Printf(TEXT("file %s"), *V->GetFileName()) : FString(TEXT("this session"));
+	Text(FString::Printf(TEXT("%s   %s   %d shots"), *Source, V->GetFilterName(), V->GetShots().Num()), 230.f * S, 18.f * S, Dim, 0.85f);
+
+	// Shot list, left
+	const TArray<FHLShotAutopsy>& Shots = V->GetShots();
+	const int32 Rows = 12;
+	const float LX = 24.f * S;
+	float Y = 70.f * S;
+	const float Row = 21.f * S;
+	const int32 Sel = V->GetSelectedIndex();
+	const int32 First = FMath::Clamp(Sel - Rows / 2, 0, FMath::Max(0, Shots.Num() - Rows));
+	DrawRect(Panel, LX - 10.f * S, Y - 8.f * S, 430.f * S, Row * (Rows + 1) + 40.f * S);
+	Text(TEXT("shot   from > at   verdict   rewind"), LX, Y, Key, 0.7f);
+	Y += Row;
+	for (int32 i = First; i < FMath::Min(Shots.Num(), First + Rows); ++i)
+	{
+		const FHLShotAutopsy& R = Shots[i];
+		if (i == Sel)
+		{
+			DrawRect(FLinearColor(1.f, 1.f, 1.f, 0.15f), LX - 6.f * S, Y - 2.f * S, 420.f * S, Row);
+		}
+		const int32 Me = V->GetLocalId();
+		const FString Who = R.ShooterId == Me ? FString(TEXT("me")) : FString::Printf(TEXT("#%d"), R.ShooterId);
+		const FString At = !R.HasTarget() ? FString(TEXT("-")) : (R.TargetId == Me ? FString(TEXT("me")) : FString::Printf(TEXT("#%d"), R.TargetId));
+		Text(FString::Printf(TEXT("%u   %s > %s   %s   %.0f ms"), R.ShotId, *Who, *At, HLShotAutopsy::VerdictKey(R.Verdict), R.RewindMs),
+			LX, Y, C(HLShotAutopsy::VerdictColor(R.Verdict)), 0.72f);
+		Y += Row;
+	}
+	if (Shots.Num() == 0)
+	{
+		Text(TEXT("No shots yet. Fire a few, or get shot."), LX, Y, Dim, 0.75f);
+	}
+
+	// Counts by verdict for the listed shots, under the list
+	const TArray<int32> Counts = HLShotAutopsy::CountByVerdict(Shots);
+	float SY = 70.f * S + Row * (Rows + 1) + 46.f * S;
+	for (int32 i = 0; i < Counts.Num(); ++i)
+	{
+		if (Counts[i] > 0)
+		{
+			Text(FString::Printf(TEXT("%s  %d"), HLShotAutopsy::VerdictKey(EHLShotVerdict(i)), Counts[i]), LX, SY, C(HLShotAutopsy::VerdictColor(EHLShotVerdict(i))), 0.7f);
+			SY += 19.f * S;
+		}
+	}
+
+	const FHLShotAutopsy* Shot = V->GetSelectedShot();
+	if (!Shot)
+	{
+		Text(TEXT("Up/Down shot   F filter   Tab/Esc close"), LX, H - 40.f * S, Key, 0.75f);
+		return;
+	}
+
+	// World labels at the drawn poses
+	TArray<UHLAutopsyViewerComponent::FMark> Marks;
+	V->GetMarks(*Shot, Marks);
+	for (int32 i = 0; i < Marks.Num(); ++i)
+	{
+		const UHLAutopsyViewerComponent::FMark& M = Marks[i];
+		if (!M.bHasPose)
+		{
+			continue;
+		}
+		const FVector P = Canvas->Project(M.World + FVector(0.f, 0.f, 18.f * i));
+		if (P.Z > 0.f)
+		{
+			Text(M.Label, P.X - 40.f * S, P.Y - 10.f * S, C(M.Color), 0.75f);
+		}
+	}
+	const FVector ShooterP = Canvas->Project(Shot->GetOrigin() + FVector(0.f, 0.f, 30.f));
+	if (ShooterP.Z > 0.f)
+	{
+		Text(TEXT("shooter"), ShooterP.X - 25.f * S, ShooterP.Y - 10.f * S, White, 0.75f);
+	}
+
+	// Verdict and numbers, top right
+	const float RX = W - 660.f * S;
+	float RY = 70.f * S;
+	DrawRect(Panel, RX - 12.f * S, RY - 8.f * S, 650.f * S, 128.f * S);
+	Text(FString::Printf(TEXT("Shot %u: %s"), Shot->ShotId, HLShotAutopsy::VerdictKey(Shot->Verdict)), RX, RY, C(HLShotAutopsy::VerdictColor(Shot->Verdict)), 1.f);
+	RY += 28.f * S;
+	Text(HLShotAutopsy::VerdictSentence(Shot->Verdict), RX, RY, White, 0.66f);
+	RY += 22.f * S;
+	if (Shot->HasTarget())
+	{
+		const float Moved = float(FVector::Dist(Shot->ViewPose.Dequantize().Location, Shot->CurrentPose.Dequantize().Location));
+		const FString Rule = Shot->HasFlag(FHLShotAutopsy::FlagCoverRule) ? FString::Printf(TEXT(", cover rule %.0f"), Shot->CoverBudgetMs) : FString();
+		Text(FString::Printf(TEXT("Shooter's screen was %.0f ms old; the server rewound %.0f ms (cap %.0f%s)"), Shot->ViewAgeMs, Shot->RewindMs, Shot->MaxRewindMs, *Rule),
+			RX, RY, Dim, 0.68f);
+		RY += 20.f * S;
+		Text(FString::Printf(TEXT("The target moved %.0f cm between the shooter's screen and the decision"), Moved), RX, RY, Dim, 0.68f);
+		RY += 20.f * S;
+		const bool bInCover = Shot->HasFlag(FHLShotAutopsy::FlagTargetInCover);
+		Text(FString::Printf(TEXT("Target already out of the shooter's sight on the server: %s   (pings %.0f / %.0f ms)"),
+			bInCover ? TEXT("YES") : TEXT("no"), Shot->ShooterRttMs, Shot->TargetRttMs), RX, RY, bInCover ? Warn : Dim, 0.68f);
+	}
+
+	// Timeline, bottom: server time relative to the decision
+	const float X0 = 60.f * S;
+	const float X1 = W - 60.f * S;
+	const float TY = H - 84.f * S;
+	DrawRect(FLinearColor(0.f, 0.f, 0.f, 0.6f), 0.f, TY - 56.f * S, W, H - TY + 56.f * S);
+	const float T0 = Shot->TrackStartMs;
+	const float T1 = FMath::Max(Shot->GetTrackEndMs(), T0 + 1.f);
+	auto ToX = [&](float Ms) { return X0 + (X1 - X0) * FMath::Clamp((Ms - T0) / (T1 - T0), 0.f, 1.f); };
+	DrawRect(FLinearColor(1.f, 1.f, 1.f, 0.25f), X0, TY, X1 - X0, 5.f * S);
+	for (int32 i = 0; i < Marks.Num(); ++i)
+	{
+		const float MX = ToX(Marks[i].Ms);
+		DrawRect(C(Marks[i].Color), MX - 2.f * S, TY - 10.f * S, 4.f * S, 25.f * S);
+		const float LY = (i % 2 == 0) ? TY - 40.f * S : TY + 20.f * S;
+		Text(FString::Printf(TEXT("%s %+.0f ms"), *Marks[i].Label, Marks[i].Ms), MX - 30.f * S, LY, C(Marks[i].Color), 0.64f);
+	}
+	const float CX = ToX(V->GetScrubMs());
+	DrawRect(White, CX - 1.5f * S, TY - 14.f * S, 3.f * S, 33.f * S);
+	Text(FString::Printf(TEXT("yellow ghost: %+.0f ms%s"), V->GetScrubMs(), V->IsPlaying() ? TEXT("  (playing x0.25)") : TEXT("")), X0, TY + 44.f * S, White, 0.7f);
+	Text(TEXT("Up/Down shot   Left/Right scrub   Space play   F filter   mouse orbit   wheel zoom   Tab/Esc close"), X0 + 330.f * S, TY + 44.f * S, Key, 0.7f);
 }
