@@ -75,7 +75,7 @@ a1.set_title("How long the victim had already been behind cover\n(on its own scr
 a1.set_ylabel("Median ms, registered hits only")
 a1.axhline(0, color="#888", lw=0.8)
 a2.set_title("Shots on target on the shooter's screen that registered\n(solid: target diving into cover; dashed: open-field strafe)", fontsize=10)
-a2.set_ylabel(f"Registered (%, n = {n:.0f} per point)")
+a2.set_ylabel(f"Registered (%; solid n = {n:.0f}, dashed n = 18-30)")
 a2.set_ylim(-3, 105)
 for a in (a1, a2):
     a.set_xlabel("Simulated round-trip time, both players (ms)")

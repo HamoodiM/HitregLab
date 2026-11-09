@@ -66,7 +66,7 @@ Read this until you can explain each section out loud, without notes. Every syst
 - **What it doesn't do.** It doesn't remove **peeker's advantage**; it moves the advantage toward the shooter.
   - The holder sees the peeker late because of RTT/2 (the peeker's moves reach the server), plus up to one server tick, plus the holder's interpolation delay, plus the other RTT/2.
   - The peeker sees the holder as soon as their own *predicted* position clears the corner.
-- **The rewind cap is a trade-off.** At 200 ms, a 250 ms player gets partial compensation, and nobody can be shot more than 200 ms after leaving a line of fire. Real games pick numbers like this; Riot's VALORANT netcode post explains theirs.
+- **The rewind cap is a trade-off.** At 200 ms, a 250 ms player gets partial compensation, and no target is rewound more than 200 ms. (That is not the same as "nobody dies more than 200 ms after reaching cover": the result still has to travel to the victim, and the victim's own screen is ahead of the server. The behind-cover sweep below measures the real number.) Real games pick numbers like this; Riot's VALORANT netcode post explains theirs.
 
 ## The peeker's-advantage meter
 
@@ -115,6 +115,48 @@ Based on Insomniac's "Techniques for Building Aim Assist in Console Shooters" (G
   - A file from a newer format version is refused, not misread.
   - Round trip: save, load, then identical hash and identical frames (`HitregLab.Replay.RoundTrip`).
 
+## Shot Autopsy and "I was behind the wall and still died"
+
+The most common netcode complaint in shooters is dying after you were already behind cover. It isn't a bug: it is the cost of favour-the-shooter lag compensation, paid by the target. This part of the lab makes that cost visible, measures it, and tries a rule that moves some of it back to the shooter.
+
+### Shot Autopsy: a verdict for every shot
+
+- **What.** The server writes one record per shot (`Autopsy/HLShotAutopsy.h`) with a verdict and its reason:
+  - `hit` (with the rewind used), `hit_clamped` (the rewind was limited but the target was still under the crosshair);
+  - `miss_aim` (a miss on the shooter's own screen too), `miss_blocked` (a wall was in the way on the shooter's screen too);
+  - `miss_moved` (a hit on the shooter's screen, lag compensation off), `miss_capped` (older than the 200 ms cap: the target had moved on), `miss_cover_rule` (refused by the cover rule below);
+  - `rejected_fire_rate`, `rejected_origin`, `rejected_timestamp`, `rejected_no_ammo`, `rejected_dead`, and `projectile`.
+- **How the server knows what the shooter saw.** `TraceShot` tests every target twice: once at the rewound, clamped time (the decision) and once at the shooter's raw view time (what its screen showed). If the second hits and the first doesn't, the clamp that was applied is the reason. The classifier itself is a pure function (`HLShotAutopsy::Classify`), so it's unit-tested without a world.
+- **A note on "too old".** In this code a view older than the 200 ms cap is not rejected: it is traced *at* the cap, so a 250 ms player still gets 200 ms of help. Only absurd timestamps (more than a second old) are rejected. So "too old" shows up as `miss_capped` or `hit_clamped`, not as a rejection.
+- **What's stored.** The shooter's ray, the target at the shooter's view time, where the server tested it, where it really was, and a 25 ms track of the target from just before the view to one victim round trip after the decision. Poses use the kill cam's 16-byte quantization; one record with a 20-sample track is 460 bytes (`HitregLab.Autopsy.RoundTrip`).
+- **Where it goes.** A few hundred ms after the decision (once the track's future poses exist in the history), the record is sent to the shooter's and the victim's clients. Each player can open "shots I fired" and "shots that hit me". F8 saves the newest 256 records into the `.hlreplay` file (format version 2; version 1 files still load, with no records). When the world ends, the server writes `autopsy_*_shots.csv` and `autopsy_*_summary.csv` (counts by verdict).
+- **The viewer** (Tab, `Autopsy/HLAutopsyViewerComponent`). Pick a shot and scrub it. A camera orbits the target and draws, side by side: the ray; blue = the target on the shooter's screen; green = the server's rewound hitboxes; red = where the target really was when the server decided; pink = where the victim's own screen had it when the hit landed (an estimate: the server track one victim round trip later, since a client is about RTT/2 ahead of the server and the result takes RTT/2 to arrive). A yellow ghost moves along the track as you scrub.
+- **Why in-game and not an editor tab.** The records live in the running game (server and clients), and the 3D view needs the level and the real wall geometry. An overlay works in PIE, standalone and a packaged client alike; an editor tab would only see PIE worlds.
+
+### Measuring behind-cover deaths
+
+- **The trial** (`Measure/HLCoverMeterSubsystem` on the server, `Measure/HLCoverComponent` on each client), on the peek map:
+  1. The runner starts in the open and strafes at full speed into cover behind the wall.
+  2. The shooter's client aims perfectly at the runner **as it draws it** and fires one shot when the runner's torso centre is a set lead (10 to 90 cm) from leaving its screen. The fire happens in `TG_PostUpdateWork`, after the remote player has been drawn for the frame, so the shot uses exactly the pose on screen.
+  3. The runner's client records, in synced server time, when its own screen lost sight of the shooter, and when the hit reached it (a reliable RPC sent with the damage).
+  4. `behind_ms` = hit arrival − loss of sight. Above 0 means "I was already behind the wall when I died".
+- **Why it happens.** A rough budget: the shooter sees the runner about one round trip plus the interpolation delay late; the shot takes RTT/2 to reach the server; the result takes the victim's RTT/2 to come back. So the hit lands about 2 × RTT + interpolation after the runner really was where the shooter shot it.
+
+### The cover rule
+
+- **The rule** (`Net/HLRewindRules`). If the target is already out of the shooter's line of sight at its *current* server position (head and torso centres both blocked), rewind it at most `CoverRuleBudgetMs` (100) instead of the full 200.
+- **Who pays.** A shooter whose view is younger than the budget is never affected. A high-ping shooter loses the last part of their compensation, and only against a target that has already made it to cover. Against targets in the open, nothing changes.
+- **Compared with lowering the cap.** A 100 ms cap also stops most late deaths, but it takes compensation away from high-ping shooters on *every* moving target. That is why the hit-registration bench is run again per rule.
+- **The trade-off is real.** Both references in the README discuss it: favour-the-shooter makes high-ping play workable and moves the cost onto the target. The cover rule picks a different point on that curve; it doesn't remove the curve.
+
+### What the numbers say
+
+- **Default (200 ms cap).** Every last-moment on-screen shot registered up to 150 ms round trip, and at 100 / 150 ms it landed a median 249 / 364 ms after the victim's own screen showed them behind the wall, 1.5 / 2.2 m past the edge. At 250 ms the cap refused them all (the view was ~305 ms old). With a 300 ms cap they all registered, 552 ms after cover.
+- **Cover rule.** At 100 ms, 4 of 12 still registered; at 150 ms, none. Against open-field targets it kept 100% registration at 100 and 150 ms, where a plain 100 ms cap fell to 50% and 23%.
+- **How to say it in an interview.** "Lag compensation decides who pays for latency. By default the target pays: at 150 ms both ways, you die about a third of a second after you reached cover. My cover rule makes a high-ping shooter pay for the last part of their own latency, but only against someone who already made it to cover, and it costs them real on-screen hits in exactly that case."
+- **Caveats.** 12 trials per point; both players had the same simulated RTT; no packet loss; the hit is treated as the killing shot (health is reset each trial so nobody respawns mid-sweep).
+
+
 ## Questions to rehearse
 
 1. Why doesn't lag compensation fix peeker's advantage? What would reduce it?
@@ -127,3 +169,6 @@ Based on Insomniac's "Techniques for Building Aim Assist in Console Shooters" (G
 5. Why is pull gated on player input?
 6. How would the kill cam change with dedicated servers and 100 players?
 7. What does rollback netcode do differently from this?
+8. Why does a player die behind a wall, and who would you rather make pay for latency: the shooter or the target?
+9. Why is the cover rule decided per target, and why test the *current* server pose for cover rather than the rewound one?
+10. Why does the server re-test the shot at the shooter's raw view time if it isn't going to use the result for damage?
