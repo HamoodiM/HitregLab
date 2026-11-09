@@ -59,10 +59,11 @@ Every system is measured, not just built.
 | Hit-reg bench | `Measure/HLHitregBenchComponent` | `-HitregBench=N` on a client: perfect aim at the drawn target, per RTT, with compensation on and off. |
 | Kill cam | `Replay/` | A client-side 8 s ring at 30 Hz, quantized to 16 bytes per pose. Played back from the killer's eyes with scrub, pause and slow motion. F8 saves a versioned `.hlreplay` for bug reproduction. |
 
-## Two bugs the measurements caught
+## Three bugs the measurements caught
 
 1. **The movement component only sends a client's moves to the server when the actor replicates movement.** I had turned replicated movement off to draw remote players from my own snapshots. The peek test showed the peeker moving on its own screen but never on the server. The fix: keep it on, and make simulated proxies ignore the engine's replicated position.
 2. **Remote players were rendered at `ServerNow - interp`,** which is *ahead* of the newest snapshot a client can have, since snapshots arrive RTT/2 late. The rewind test caught it once its client buffer only held snapshots that would actually have arrived.
+3. **Bots all had player id 0.** Only player controllers get an id from the game session (`AGameSession::RegisterPlayer`), so every bot kept the default. The kill cam keyed its tracks by player id, so the bots merged into one track and the "killer" camera hopped between them every frame. Bots now get ids from the game session, the recorder refuses to merge two characters into one track, and each kill cam logs how far the killer's recorded aim was from the victim at the kill (0.1 to 0.3 degrees after the fix).
 
 ## Running it
 

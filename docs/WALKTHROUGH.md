@@ -106,6 +106,10 @@ Based on Insomniac's "Techniques for Building Aim Assist in Console Shooters" (G
   - Slow motion around the kill; scrub, pause and speed controls.
   - Real characters are hidden locally during playback.
 - **Why client-side?** No bandwidth and no server memory. The trade-off: it shows the victim's view of the killer, which is already delayed by interpolation, not the killer's actual screen. A server-recorded kill cam (like Overwatch's, see the GDC 2017 talk) shows the truth, at the cost of shipping the recording.
+- **Bug found after the first demo clip.** The kill cam keyed tracks by `PlayerState->GetPlayerId()`. Bots never get one: only `AGameSession::RegisterPlayer` assigns ids, and it only runs for player controllers. So every bot had id 0 and their tracks merged.
+  - The fix: `SpawnBot` takes an id from `GameSession->GetNextPlayerID()`.
+  - The recorder now skips duplicate ids with a warning.
+  - `LogSanity` logs the killer's aim error at the kill: now 0.1 to 0.3 degrees.
 - **Bug repro.**
   - F8 / `HLSaveReplay` writes a versioned file; `HLPlayReplay <file>` plays it back.
   - A file from a newer format version is refused, not misread.
